@@ -7060,10 +7060,20 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all)
        also check if protection has not been acquired earlier, which is possible
        in slave threads to protect master binlog coordinates.
     */
+    WSREP_DEBUG("Checking if binlog protection needs to be acquired"
+                " thd->backup_binlog_lock.is_acquired(): %s"
+                " thd->backup_binlog_lock.is_protection_acquired(): %s",
+                thd->backup_binlog_lock.is_acquired() ?
+                "true" : "false",
+                thd->backup_binlog_lock.is_protection_acquired() ?
+                "true" : "false");
+
     if (!thd->backup_binlog_lock.is_acquired() &&
         !thd->backup_binlog_lock.is_protection_acquired())
     {
       const ulong timeout= thd->variables.lock_wait_timeout;
+
+      WSREP_DEBUG("Acquiring binlog protection (timeout: %lu)", timeout);
 
       DBUG_PRINT("debug", ("Acquiring binlog protection lock"));
 
@@ -7076,6 +7086,16 @@ TC_LOG::enum_result MYSQL_BIN_LOG::commit(THD *thd, bool all)
       {
         lock= thd->backup_binlog_lock.acquire_protection(
                 thd, MDL_EXPLICIT, timeout);
+
+        if (!lock) {
+           WSREP_DEBUG("Binlog protection acquired");
+        } else {
+           WSREP_DEBUG("Binlog protection failed"
+                       " thd->wsrep_conflict_state: %d"
+                       " thd->wsrep_exec_mode: %d",
+                       thd->wsrep_conflict_state,
+                       thd->wsrep_exec_mode);
+        }
 
         /* A local running thread that is commit state may get killed
            by background replicating thread.

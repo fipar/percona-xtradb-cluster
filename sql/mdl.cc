@@ -2522,8 +2522,10 @@ MDL_context::acquire_lock(MDL_request *mdl_request, ulong lock_wait_timeout)
     set_timespec(abs_shortwait, 1);
   }
   if (wait_status == MDL_wait::EMPTY)
+  {
     wait_status= m_wait.timed_wait(m_owner, &abs_timeout, TRUE,
                                    mdl_request->key.get_wait_state_name());
+  }
 
   done_waiting_for();
 
@@ -2534,14 +2536,19 @@ MDL_context::acquire_lock(MDL_request *mdl_request, ulong lock_wait_timeout)
     switch (wait_status)
     {
     case MDL_wait::VICTIM:
+      WSREP_DEBUG("MDL Lock failure (reason: DEADLOCK)");
       my_error(ER_LOCK_DEADLOCK, MYF(0));
       break;
     case MDL_wait::TIMEOUT:
+      WSREP_DEBUG("MDL Lock failure (reason: TIMEOUT)");
       my_error(ER_LOCK_WAIT_TIMEOUT, MYF(0));
       break;
     case MDL_wait::KILLED:
       if (!m_owner->is_timedout())
+      {
+        WSREP_DEBUG("MDL Lock failure (reason: INTERRUPTED)");
         my_error(ER_QUERY_INTERRUPTED, MYF(0));
+      }
       break;
     default:
       DBUG_ASSERT(0);
